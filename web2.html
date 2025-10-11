@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Keerthipavan | Portfolio</title>
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<style>
+body {
+  margin: 0; font-family: Arial, sans-serif; color: #333;
+}
+header {
+  background: linear-gradient(135deg, #4e54c8, #8f94fb);
+  color: #fff; text-align: center; padding: 80px 20px;
+}
+h1 { font-size: 3em; }
+h2 { color: #4e54c8; border-bottom: 3px solid #4e54c8; padding-bottom: 10px; }
+section {
+  max-width: 1000px; margin: 40px auto; padding: 20px;
+}
+.works {
+  display: flex; flex-wrap: wrap; gap: 20px;
+}
+.work-item {
+  flex: 1 1 calc(50% - 20px);
+  background: #f9f9f9; padding: 15px;
+  border-radius: 8px; text-align: center;
+  cursor: pointer; transition: transform 0.3s;
+}
+.work-item:hover { transform: translateY(-5px); }
+footer {
+  text-align: center; padding: 20px; color: #666;
+}
+.popup, .success-screen {
+  position: fixed; top:0; left:0;
+  width:100%; height:100%; display: flex;
+  justify-content: center; align-items: center;
+}
+.popup-content, .success-content {
+  background: rgba(255,255,255,0.15);
+  backdrop-filter: blur(10px);
+  padding: 30px; border-radius: 10px;
+  text-align: center; width:300px;
+}
+.popup-content input {
+  width: 100%; padding: 8px; margin: 5px 0;
+}
+.hidden { display: none; }
+@keyframes success-pop {
+  0% { transform: scale(0.5); opacity: 0; }
+  100% { transform: scale(1.0); opacity: 1; }
+}
+.success-screen {
+  animation: success-pop 0.5s ease;
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>Hi, I'm Keerthipavan</h1>
+  <p>Student & Tech Enthusiast</p>
+  <p>I'm a 17-year-old student at NTTF College with a passion for design, coding, and research.<br> I create innovative solutions using Canva, Fusion 360, and Python.</p>
+</header>
+
+<section>
+  <h2>About Me</h2>
+  <p>I'm Keerthipavan, a 17-year-old student at NTTF College with a passion for technology and design. I enjoy exploring the intersection of creativity and technical skills through various projects. My interests span from digital design using Canva to 3D modeling with Fusion 360, and coding in Python. I'm also developing my skills as a prompt writer and researcher, always looking to expand my knowledge and capabilities.<br><br>Education: Student at NTTF College (Mechatronics and Smart Factory)<br>Age: 17 Years | Young Tech Enthusiast</p>
+</section>
+
+<section>
+  <h2>My Works</h2>
+  <div class="works">
+    <div class="work-item" data-work="Prompt Writing">Prompt Writing</div>
+    <div class="work-item" data-work="Canva Design">Canva Design</div>
+    <div class="work-item" data-work="Fusion 360">Fusion 360</div>
+    <div class="work-item" data-work="Python Programming">Python Programming</div>
+    <div class="work-item" data-work="Research Projects">Research Projects</div>
+  </div>
+</section>
+
+<section>
+  <h2>Contact</h2>
+  <p>Email: <a href="mailto:keerthipava272007@gmail.com">keerthipava272007@gmail.com</a></p>
+  <p>Phone: <a href="tel:+919019342709">+91 9019342709</a></p>
+</section>
+
+<footer>&copy; 2024 Keerthipavan. All rights reserved.</footer>
+
+<!-- POPUP FORM -->
+<div class="popup hidden" id="popup">
+  <div class="popup-content">
+    <h3>Leave a Message</h3>
+    <input id="name" placeholder="Your Name"><br>
+    <input id="number" placeholder="Your Number"><br>
+    <input id="email" placeholder="Your Email"><br>
+    <button id="submit">Submit</button>
+  </div>
+</div>
+
+<!-- SUCCESS SCREEN -->
+<div class="success-screen hidden" id="success-screen">
+  <div class="success-content">
+    <h3>✅ Message Sent Successfully!</h3>
+  </div>
+</div>
+
+<script>
+const popup = document.getElementById("popup");
+const successScreen = document.getElementById("success-screen");
+const workItems = document.querySelectorAll(".work-item");
+
+workItems.forEach(item => {
+  item.addEventListener("click", () => {
+    popup.classList.remove("hidden");
+  });
+});
+
+const submitBtn = document.getElementById("submit");
+submitBtn.addEventListener("click", () => {
+  popup.classList.add("hidden");
+  successScreen.classList.remove("hidden");
+  setTimeout(() => {
+    successScreen.classList.add("hidden");
+  }, 2000);
+});
+</script>
+</body>
+</html>

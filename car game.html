@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Escape Road Game</title>
+    
+    <style>
+        /* --- CSS Styling (style.css content) --- */
+        body {
+            font-family: sans-serif;
+            background-color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+
+        #game-container {
+            position: relative;
+            border: 5px solid #000;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            overflow: hidden; /* Keep game elements inside */
+        }
+
+        #gameCanvas {
+            background-color: #4CAF50; /* Road border/grass color */
+            display: block;
+        }
+
+        #startScreen, #gameOverScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        #startButton, #restartButton {
+            padding: 10px 20px;
+            font-size: 1.2em;
+            cursor: pointer;
+            margin-top: 15px;
+            border: none;
+            background-color: #FFC107;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <canvas id="gameCanvas" width="300" height="500"></canvas>
+        <div id="startScreen">
+            <h1>Escape Road</h1>
+            <p>Use Left/Right Arrow Keys to steer.</p>
+            <button id="startButton">Start Game</button>
+        </div>
+        <div id="gameOverScreen" style="display: none;">
+            <h2>Game Over!</h2>
+            <p>Final Score: <span id="finalScore">0</span></p>
+            <button id="restartButton">Play Again</button>
+        </div>
+    </div>
+
+    <script>
+        /* --- JavaScript Logic (game.js content) --- */
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const startScreen = document.getElementById('startScreen');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const finalScoreElement = document.getElementById('finalScore');
+        const startButton = document.getElementById('startButton');
+        const restartButton = document.getElementById('restartButton');
+
+        // --- Game Settings ---
+        const gameWidth = canvas.width;
+        const gameHeight = canvas.height;
+        const roadInnerWidth = gameWidth * 0.7; // Inner road width
+        const roadLeft = (gameWidth - roadInnerWidth) / 2;
+        const roadRight = roadLeft + roadInnerWidth;
+        const laneWidth = roadInnerWidth / 3;
+
+        let gameRunning = false;
+        let score = 0;
+        let animationFrameId;
+
+        // --- Player Car ---
+        let player = {
+            x: gameWidth / 2 - laneWidth / 2,
+            y: gameHeight - 70,
+            width: 30,
+            height: 50,
+            speed: 5,
+            color: '#007bff',
+        };
+
+        let keys = {};
+
+        // --- Obstacles ---
+        let obstacles = [];
+        let obstacleSpeed = 3;
+        let lastObstacleTime = 0;
+        const obstacleInterval = 1000; // milliseconds
+
+        // --- Game Loop ---
+        function gameLoop(timestamp) {
+            if (!gameRunning) return;
+
+            update();
+            draw();
+
+            // Spawn new obstacle
+            if (timestamp - lastObstacleTime > obstacleInterval) {
+                spawnObstacle();
+                lastObstacleTime = timestamp;
+            }
+
+            animationFrameId = requestAnimationFrame(gameLoop);
+        }
+
+        // --- Update Game State ---
+        function update() {
+            // 1. Move Player
+            if (keys['ArrowLeft']) {
+                player.x -= player.speed;
+            }
+            if (keys['ArrowRight']) {
+                player.x += player.speed;
+            }
+
+            // Keep player within the road boundaries
+            player.x = Math.max(roadLeft, player.x);
+            player.x = Math.min(roadRight - player.width, player.x);
+
+            // 2. Move Obstacles
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                let obs = obstacles[i];
+                obs.y += obstacleSpeed;
+
+                // Collision Check (Simple Axis-Aligned Bounding Box - AABB)
+                if (player.x < obs.x + obs.width &&
+                    player.x + player.width > obs.x &&
+                    player.y < obs.y + obs.height &&
+                    player.y + player.height > obs.y) {
+                    
+                    // Collision detected!
+                    gameOver();
+                    return;
+                }
+
+                // Remove off-screen obstacles and increase score
+                if (obs.y > gameHeight) {
+                    obstacles.splice(i, 1);
+                    score += 10;
+                }
+            }
+
+            // Increase difficulty/speed over time
+            obstacleSpeed = 3 + Math.floor(score / 100) * 0.5;
+        }
+
+        // --- Draw Game Elements ---
+        function draw() {
+            // Clear the canvas
+            ctx.clearRect(0, 0, gameWidth, gameHeight);
+
+            // 1. Draw Road (Inner road area - black)
+            ctx.fillStyle = '#444';
+            ctx.fillRect(roadLeft, 0, roadInnerWidth, gameHeight);
+
+            // 2. Draw Lane Markers (Simple white lines)
+            ctx.fillStyle = '#fff';
+            // Left marker
+            ctx.fillRect(roadLeft + laneWidth, 0, 5, gameHeight);
+            // Right marker
+            ctx.fillRect(roadLeft + 2 * laneWidth - 5, 0, 5, gameHeight);
+
+            // 3. Draw Player Car
+            ctx.fillStyle = player.color;
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+
+            // 4. Draw Obstacles (Other cars)
+            obstacles.forEach(obs => {
+                ctx.fillStyle = obs.color;
+                ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+            });
+
+            // 5. Draw Score
+            ctx.fillStyle = '#fff';
+            ctx.font = '20px sans-serif';
+            ctx.fillText('Score: ' + score, 10, 30);
+        }
+
+        // --- Obstacle Generation ---
+        function spawnObstacle() {
+            const obstacleColors = ['#ff0000', '#ffc107', '#17a2b8', '#6610f2'];
+            const lane = Math.floor(Math.random() * 3); // 0, 1, or 2 for three lanes
+            
+            // Calculate x position based on the lane
+            const xPos = roadLeft + lane * laneWidth + (laneWidth / 2) - 15; // Center obstacle in the lane
+
+            const newObstacle = {
+                x: xPos,
+                y: -50, // Start above the screen
+                width: 30,
+                height: 50,
+                color: obstacleColors[Math.floor(Math.random() * obstacleColors.length)],
+            };
+
+            obstacles.push(newObstacle);
+        }
+
+        // --- Game State Functions ---
+        function startGame() {
+            // Reset state
+            score = 0;
+            obstacles = [];
+            player.x = gameWidth / 2 - laneWidth / 2;
+            obstacleSpeed = 3;
+
+            startScreen.style.display = 'none';
+            gameOverScreen.style.display = 'none';
+            gameRunning = true;
+            lastObstacleTime = performance.now(); // Initialize time
+            requestAnimationFrame(gameLoop);
+        }
+
+        function gameOver() {
+            gameRunning = false;
+            cancelAnimationFrame(animationFrameId);
+            finalScoreElement.textContent = score;
+            gameOverScreen.style.display = 'flex';
+        }
+
+        // --- Event Listeners ---
+        startButton.addEventListener('click', startGame);
+        restartButton.addEventListener('click', startGame);
+
+        document.addEventListener('keydown', (e) => {
+            keys[e.key] = true;
+        });
+
+        document.addEventListener('keyup', (e) => {
+            keys[e.key] = false;
+        });
+
+        // Show start screen initially
+        startScreen.style.display = 'flex';
+    </script>
+</body>
+</html>

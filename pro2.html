@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Cloud Data Form</title>
+    <style>
+        body { font-family: Arial; margin: 40px; }
+        form { max-width: 400px; margin: auto; padding: 20px; border: 1px solid rgb(0, 0, 0); border-radius: 10px; background: #f9f9f9; }
+        input, button { width: 100%; padding: 10px; margin: 8px 0; box-sizing: border-box; }
+        button { background-color: #4CAF50; color: white; border: none; }
+        button:hover { background-color: #45a049; }
+    </style>
+</head>
+<body>
+    <h2 style="text-align:center;">Person Data Form (Cloud)</h2>
+    <form id="personForm">
+        <input type="text" id="name" placeholder="Name" required>
+        <input type="number" id="age" placeholder="Age" required>
+        <input type="number" id="weight" placeholder="Weight (kg)" required>
+        <button type="submit">Save to Cloud</button>
+    </form>
+
+    <script>
+        document.getElementById('personForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const data = {
+                name: document.getElementById('name').value,
+                age: document.getElementById('age').value,
+                weight: document.getElementById('weight').value
+            };
+            const response = await fetch('/submit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            const result = await response.text();
+            alert(result);
+        });
+    </script>
+</body>
+</html>

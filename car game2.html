@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Escape Road — Mini Car Chase Game (Debugged)</title>
+    <style>
+        :root{--bg:#1b1f2a;--road:#2b2f36;--lane:#3a3f46;--text:#e6eef8}
+        *{box-sizing:border-box;margin:0;padding:0}
+        html,body{height:100%;background:linear-gradient(180deg,#07101a 0%,#0f1620 100%);color:var(--text);font-family:Inter,system-ui,Arial}
+        .wrap{min-height:100%;display:flex;flex-direction:column;align-items:center;padding:18px}
+        header{width:100%;max-width:900px;display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+        h1{font-size:18px}
+        #hud{display:flex;gap:10px;align-items:center}
+        /* Adjusted button color for better visibility */
+        button{background:#4cc; color:#111; border:none;padding:8px 12px;border-radius:8px;cursor:pointer; font-weight: bold;}
+        #game{width:100%;max-width:900px;background:var(--road);border-radius:12px;padding:12px;box-shadow:0 8px 30px rgba(2,6,23,.6)}
+        canvas{display:block;width:100%;height:auto;border-radius:8px;background:linear-gradient(#3b3f48,#2b2f36)}
+        .controls{display:flex;gap:8px;justify-content:center;margin-top:10px}
+        .control-btn{background:transparent;border:1px solid rgba(255,255,255,.06);padding:8px;border-radius:8px;color:var(--text)}
+        .overlay{position:relative}
+        .panel{position:absolute;left:12px;top:12px;background:rgba(0,0,0,.35);padding:8px;border-radius:8px}
+        .center-panel{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
+        .center-panel .box{background:rgba(0,0,0,.85);padding:24px;border-radius:12px;text-align:center;box-shadow:0 0 20px rgba(0,0,0,.5)}
+        a.small{font-size:12px;color:#b8dff7}
+        footer{margin-top:12px;color:#9fb3c9;font-size:13px}
+        @media (max-width:520px){h1{font-size:16px}}
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <header>
+            <h1>Escape Road — Car Chase</h1>
+            <div id="hud">
+                <div id="score">Score: 0</div>
+                <div id="stars">Stars: 0</div>
+                <button id="restart">Start / Restart</button>
+            </div>
+        </header>
+
+        <div id="game" role="application">
+            <div class="overlay">
+                <canvas id="c" width="900" height="600"></canvas>
+                <div class="panel" id="speed">Speed: 0</div>
+                <div class="center-panel" id="menu" style="display:flex">
+                    <div class="box">
+                        <h2>Escape Road</h2>
+                        <p>Use ← → or touch to change lanes. Up to accelerate, Down to brake.</p>
+                        <p><a class="small" href="#" id="how">How it works</a></p>
+                        <button id="startBtn">Play</button>
+                    </div>
+                </div>
+            </div>
+            <div class="controls">
+                <button class="control-btn" id="left">◀</button>
+                <button class="control-btn" id="acc">▲</button>
+                <button class="control-btn" id="brake">▼</button>
+                <button class="control-btn" id="right">▶</button>
+            </div>
+        </div>
+
+        <footer>
+            <div>Made with ♥ — open the page in a browser. Save as <code>escape_road.html</code></div>
+        </footer>
+    </div>
+
+    <script>
+        // ====== Game variables ======
+        const canvas = document.getElementById('c');
+        const ctx = canvas.getContext('2d');
+        let W = canvas.width, H = canvas.height;
+
+        const lanes = 4;
+        const laneWidth = W * 0.5 / lanes; // central road occupies half the canvas
+        const roadX = (W - laneWidth * lanes) / 2;
+        let roadDashOffset = 0; // for road line animation
+
+        let state = 'menu'; // menu, playing, crashed
+        let score = 0;
+        let stars = 0;
+        let speed = 4; // base speed
+        let difficulty = 1;
+        let spawnTimer = 0;
+        let obstacles = [];
+
+        // Player car
+        const player = {lane: Math.floor(lanes/2), x:0, y:H - 120, width:laneWidth*0.6, height:80, targetLane:Math.floor(lanes/2), vx:0};
+        let canChangeLane = true; // For better keyboard/button control
+
+        // Police (chaser)
+        const police = {active:false, y: -200, speed: 3};
+
+        // ====== Helpers ======
+        function laneCenter(i){
+            return roadX + laneWidth * i + laneWidth/2;
+        }
+
+        function resetGame(){
+            state = 'playing';
+            score = 0; stars = 0; speed = 4; difficulty = 1; spawnTimer = 0; obstacles = [];
+            player.lane = Math.floor(lanes/2); 
+            player.targetLane = player.lane; 
+            player.x = laneCenter(player.lane) - player.width/2;
+            police.active = false; police.y = -200; police.speed = 3;
+            updateHUD();
+        }
+
+        function updateHUD(){
+            document.getElementById('score').textContent = 'Score: ' + Math.floor(score);
+            document.getElementById('stars').textContent = 'Stars: ' + stars;
+            document.getElementById('speed').textContent = 'Speed: ' + Math.round(speed*10)/10;
+        }
+
+        // ====== Input ======
+        const keys = {};
+        document.addEventListener('keydown', e=>{keys[e.key]=true; if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)) e.preventDefault();});
+        document.addEventListener('keyup', e=>{
+            keys[e.key]=false;
+            // Reset lane change flag on key up to allow a new press
+            if(e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                canChangeLane = true;
+            }
+        });
+
+        // touch / buttons
+        function laneLeft(){ 
+            if(player.targetLane > 0) {
+                player.targetLane -= 1; 
+            }
+        }
+        function laneRight(){ 
+            if(player.targetLane < lanes-1){ 
+                player.targetLane += 1; 
+            }
+        }
+        document.getElementById('left').onclick = laneLeft;
+        document.getElementById('right').onclick = laneRight;
+        document.getElementById('acc').onclick = ()=> speed = Math.min(12, speed+1);
+        document.getElementById('brake').onclick = ()=> speed = Math.max(1, speed-1);
+
+        canvas.addEventListener('touchstart', handleTouchStart, {passive:false});
+        let initialTouchX = null;
+        function handleTouchStart(e){
+            e.preventDefault();
+            const t = e.touches[0];
+            initialTouchX = t.clientX;
+            canvas.addEventListener('touchmove', handleTouchMove, {passive:false});
+            canvas.addEventListener('touchend', handleTouchEnd, {passive:false});
+        }
+        function handleTouchMove(e){ 
+            e.preventDefault(); 
+            const t = e.touches[0]; 
+            const dx = t.clientX - initialTouchX; 
+            if(dx > 40){ 
+                laneRight(); 
+                initialTouchX = t.clientX; // reset to prevent continuous swipe
+            } 
+            if(dx < -40){ 
+                laneLeft(); 
+                initialTouchX = t.clientX; // reset to prevent continuous swipe
+            } 
+        }
+        function handleTouchEnd(e){ 
+            canvas.removeEventListener('touchmove', handleTouchMove); 
+            canvas.removeEventListener('touchend', handleTouchEnd); 
+            initialTouchX = null 
+        }
+
+        // ====== Obstacles ======
+        function spawnObstacle(){
+            // Choose a lane, with a slight bias away from the player's current collision lane
+            let lane;
+            do {
+                lane = Math.floor(Math.random()*lanes);
+            } while (lane === player.lane && Math.random() < 0.5); // 50% chance to avoid player's lane
+
+            const kind = Math.random()<0.12 ? 'pickup' : 'car';
+            const width = laneWidth*0.6;
+            const height = kind==='car' ? 80 : 36;
+            // Obstacles move slower than the player's effective road speed
+            obstacles.push({lane, x: laneCenter(lane)-width/2, y: -height - 20, w: width, h: height, kind, speed: -speed * 0.4});
+        }
+
+        function updateObstacles(dt){
+            spawnTimer += dt;
+            // Min spawn interval of 160ms
+            const spawnInterval = Math.max(450 - difficulty*30, 160); 
+            if(spawnTimer > spawnInterval){ 
+                spawnTimer = 0; 
+                spawnObstacle(); 
+            }
+
+            // Road scrolling: This is the speed at which obstacles and lines move down
+            const roadSpeed = speed * dt * 0.06; 
+            
+            // Update road line animation offset (70 is the dash+gap size for center lines 40+30)
+            roadDashOffset = (roadDashOffset + roadSpeed) % 70; 
+
+            for(let i=obstacles.length-1;i>=0;i--){
+                const ob = obstacles[i];
+                // Move obstacle based on road speed (relative to player speed)
+                ob.y += roadSpeed; 
+                if(ob.y > H + 200) obstacles.splice(i,1);
+            }
+        }
+
+        // collision
+        function checkCollision(){
+            for(const ob of obstacles){
+                // Only check for collision if obstacle is in the player's **current** collision lane
+                if(ob.lane === player.lane){ 
+                    const px = player.x, py = player.y, pw = player.width, ph = player.height;
+                    // A more forgiving collision box (padding 10px from top and bottom)
+                    if(py < ob.y + ob.h - 10 && py + ph - 10 > ob.y){
+                        if(ob.kind === 'pickup'){
+                            stars +=1; // collect
+                            obstacles = obstacles.filter(o=>o!==ob);
+                            updateHUD();
+                        } else {
+                            // crash!
+                            state = 'crashed';
+                            police.active = true;
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+
+        // ====== Police & difficulty ======
+        function updatePolice(dt){
+            if(!police.active){
+                // activate after certain score
+                if(score > 100*difficulty) police.active = true;
+            }
+            if(police.active){
+                // Police speed scales with difficulty and is affected by overall game speed
+                const policeMoveSpeed = (police.speed + difficulty*0.4) * dt * 0.06;
+                police.y += policeMoveSpeed;
+                
+                // if police crosses inside player area -> game over confirmed
+                if(police.y > player.y - 40) {
+                    state = 'crashed';
+                }
+            }
+        }
+
+        // ====== Draw ======
+        function draw(){
+            ctx.clearRect(0,0,W,H);
+            // background
+            ctx.fillStyle = '#0b1116';
+            ctx.fillRect(0,0,W,H);
+
+            // draw road
+            ctx.fillStyle = '#20242b';
+            ctx.fillRect(roadX, 0, laneWidth*lanes, H);
+
+            // road side stripes
+            ctx.fillStyle = '#15181c';
+            ctx.fillRect(roadX-18,0,18,H);
+            ctx.fillRect(roadX+laneWidth*lanes,0,18,H);
+
+            // lane lines (sides and center)
+            ctx.setLineDash([]); // Important to clear before setting new dash
+            
+            // Road line animation based on speed
+            ctx.lineDashOffset = -roadDashOffset;
+
+            // Center Dashed Lines (White)
+            ctx.strokeStyle = '#d8d8d8'; ctx.lineWidth = 3; ctx.setLineDash([40,30]);
+            for(let i=1;i<lanes;i++){
+                const x = roadX + laneWidth*i;
+                ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
+            }
+            
+            // Side Dashed Lines (Grey)
+            ctx.strokeStyle = '#3c3f44'; ctx.lineWidth = 4; ctx.setLineDash([30,20]);
+            ctx.beginPath(); ctx.moveTo(roadX,0); ctx.lineTo(roadX,H); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(roadX+laneWidth*lanes,0); ctx.lineTo(roadX+laneWidth*lanes,H); ctx.stroke();
+
+            ctx.setLineDash([]); // Reset dash for drawing cars
+
+            // draw obstacles
+            for(const ob of obstacles){
+                if(ob.kind === 'car') drawCar(ob.x, ob.y, ob.w, ob.h, '#b33');
+                else drawPickup(ob.x, ob.y, ob.w, ob.h);
+            }
+
+            // draw player
+            drawCar(player.x, player.y, player.width, player.height, '#4cc');
+
+            // draw police
+            if(police.active){
+                // Drawing police car slightly off center to look bigger/more menacing
+                drawCar(laneCenter(Math.max(0,player.lane-1))-60, police.y, 120, 80, '#111');
+                ctx.fillStyle = 'white'; ctx.font='14px Arial'; ctx.fillText('POLICE', laneCenter(Math.max(0,player.lane-1))-30, police.y+18);
+            }
+
+            // HUD little
+            // This is the little score box drawn directly on the canvas
+            // The main HUD is in HTML and updated by updateHUD()
+            ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(10,10,140,40);
+            ctx.fillStyle = '#fff'; ctx.font='16px Arial'; ctx.fillText('Score: '+Math.floor(score), 18,36);
+        }
+
+        function drawCar(x,y,w,h,color){
+            ctx.save();
+            ctx.fillStyle = color;
+            roundRect(ctx,x,y,w,h,8,true,false);
+            // windows
+            ctx.fillStyle = 'rgba(255,255,255,0.12)';
+            ctx.fillRect(x + w*0.14, y + h*0.14, w*0.72, h*0.36);
+            // wheels
+            ctx.fillStyle = '#111'; ctx.fillRect(x+6,y+h-12,18,8); ctx.fillRect(x+w-24,y+h-12,18,8);
+            ctx.restore();
+        }
+        function drawPickup(x,y,w,h){
+            // Pickup (Star)
+            ctx.save(); ctx.fillStyle='#f4c542'; roundRect(ctx,x,y,w,h,6,true,false); ctx.fillStyle='#222'; ctx.fillRect(x+6,y+h-10,w-12,6); ctx.restore();
+        }
+
+        function roundRect(ctx,x,y,w,h,r,fill,stroke){ 
+            if(typeof r==='undefined') r=5; 
+            ctx.beginPath(); 
+            ctx.moveTo(x+r,y); 
+            ctx.arcTo(x+w,y,x+w,y+h,r); 
+            ctx.arcTo(x+w,y+h,x,y+h,r); 
+            ctx.arcTo(x,y+h,x,y,r); 
+            ctx.arcTo(x,y,x+w,y,r); 
+            ctx.closePath(); 
+            if(fill) ctx.fill(); 
+            if(stroke) ctx.stroke(); 
+        }
+
+        // ====== Game loop ======
+        let last = performance.now();
+        function loop(now){
+            const dt = now - last; last = now;
+            
+            // Player input logic for smooth one-time key presses
+            if (state === 'playing') {
+                if ((keys['ArrowLeft'] || keys['ArrowRight']) && canChangeLane) {
+                    if (keys['ArrowLeft']) laneLeft();
+                    if (keys['ArrowRight']) laneRight();
+                    canChangeLane = false; // Prevents spamming a lane change per frame
+                }
+
+                if(keys['ArrowUp']) speed = Math.min(12, speed + 0.02*dt);
+                if(keys['ArrowDown']) speed = Math.max(1, speed - 0.03*dt);
+
+                // move player smoothly towards the TARGET lane center
+                const targetX = laneCenter(player.targetLane) - player.width/2;
+                player.x += (targetX - player.x) * Math.min(1, 0.12 * (dt/16));
+
+                // Update player.lane (collision lane) only once we are very close to the target position
+                // This is the fix for the collision bug
+                if (Math.abs(player.x - targetX) < 1) {
+                    player.lane = player.targetLane;
+                    player.x = targetX; // Snap to center
+                }
+
+                // update obstacles
+                updateObstacles(dt);
+
+                // update score & difficulty
+                score += dt * (speed*0.02);
+                difficulty = 1 + Math.floor(score/500);
+
+                // police
+                updatePolice(dt);
+
+                // collisions
+                checkCollision();
+
+                // awarding stars based on milestones
+                // Check only once when the score passes a multiple of 300
+                if(Math.floor(score) % 300 === 0 && Math.floor(score)>0 && score * dt > 1){ 
+                    stars = Math.min(5, stars +1); 
+                }
+
+                updateHUD();
+            }
+
+            draw();
+
+            if(state === 'crashed'){
+                // show menu with crash message
+                document.getElementById('menu').style.display = 'flex';
+                document.querySelector('#menu .box h2').textContent = 'You Crashed! Score: ' + Math.floor(score) + ' Stars: ' + stars;
+            } else {
+                // hide menu if playing or on the initial menu
+                if(state === 'playing') {
+                    document.getElementById('menu').style.display = 'none';
+                }
+            }
+
+            requestAnimationFrame(loop);
+        }
+
+        // start handler
+        document.getElementById('startBtn').addEventListener('click', ()=>{
+            document.getElementById('menu').style.display='none';
+            resetGame();
+        });
+        document.getElementById('restart').addEventListener('click', ()=>{ 
+            // Ensures the menu disappears if you restart while crashed
+            document.getElementById('menu').style.display='none'; 
+            resetGame(); 
+        });
+
+        // how it works popup
+        document.getElementById('how').addEventListener('click', (e)=>{ e.preventDefault(); alert('Escape Road: Control your car using Left/Right arrows or buttons to change lanes. Up/Down to accelerate/brake. Avoid cars, collect pickups (stars). Police will chase you at higher scores!'); });
+
+        // init
+        player.x = laneCenter(player.lane) - player.width/2;
+        updateHUD();
+        requestAnimationFrame(loop);
+    </script>
+</body>
+</html>

@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Balloon Game</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; overflow: hidden;
+    background: linear-gradient(to bottom, #87ceeb 0%, #00aaff 100%);
+    height: 100vh;
+    font-family: Arial, sans-serif;
+    user-select: none;
+  }
+  #gameContainer {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    background: linear-gradient(to bottom, #87ceeb 0%, #00aaff 100%);
+  }
+  /* Sky movement using an animation */
+  @keyframes skyMove {
+    0% {background-position: 0 0;}
+    50% {background-position: 0 30px;}
+    100% {background-position: 0 0;}
+  }
+  #sky {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(to bottom, #87ceeb 0%, #00aaff 100%);
+    animation: skyMove 6s ease-in-out infinite;
+    z-index: 0;
+  }
+
+  /* Balloon */
+  #balloon {
+    position: absolute;
+    left: 10%;
+    top: 50%;
+    width: 60px;
+    height: 100px;
+    transform-origin: center bottom;
+    user-select: none;
+    z-index: 10;
+  }
+  /* Balloon shape: circle top and string below */
+  #balloon .circle {
+    width: 60px;
+    height: 70px;
+    background: white;
+    border-radius: 50% 50% 45% 45% / 60% 60% 40% 40%;
+    position: relative;
+    box-shadow: 0 0 10px rgba(255,255,255,0.8);
+  }
+  /* Balloon string with waving animation */
+  #balloon .string {
+    position: absolute;
+    width: 4px;
+    height: 60px;
+    background: white;
+    left: 50%;
+    top: 70px;
+    margin-left: -2px;
+    animation: stringWave 2s ease-in-out infinite;
+    border-radius: 2px;
+  }
+  @keyframes stringWave {
+    0%, 100% { transform: translateX(0); }
+    50% { transform: translateX(6px); }
+  }
+
+  /* Controls container */
+  #controls {
+    position: absolute;
+    top: 15px;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+    color: white;
+    z-index: 20;
+  }
+  #instructions {
+    margin: 10px 0 20px;
+    font-size: 18px;
+    font-weight: bold;
+  }
+  button, select {
+    font-size: 16px;
+    padding: 8px 15px;
+    margin: 0 8px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+  }
+  button#startBtn {
+    background-color: #0077cc;
+    color: white;
+  }
+  button#startBtn:hover {
+    background-color: #005fa3;
+  }
+  select#difficulty {
+    border-radius: 6px;
+  }
+
+  /* Slow button bottom right */
+  #slowBtn {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    padding: 10px 20px;
+    background: #444;
+    color: white;
+    border-radius: 20px;
+    border: none;
+    cursor: pointer;
+    z-index: 20;
+    font-size: 16px;
+    user-select: none;
+    opacity: 1;
+    transition: opacity 0.3s ease;
+  }
+  #slowBtn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* Obstacles */
+  .obstacle {
+    position: absolute;
+    background: red;
+    border-radius: 6px;
+    user-select: none;
+  }
+  /* Different obstacle types */
+  .obstacle.spike {
+    width: 20px;
+    height: 40px;
+    background: linear-gradient(45deg, #ff4444 0%, #bb0000 100%);
+    clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+  }
+  .obstacle.cloud {
+    width: 60px;
+    height: 30px;
+    background: #eee;
+    border-radius: 30px;
+    box-shadow: 15px 0 0 0 #eee, 30px 0 0 0 #eee;
+  }
+  .obstacle.bird {
+    width: 40px;
+    height: 20px;
+    background: transparent;
+  }
+  /* Bird wings using CSS */
+  .obstacle.bird::before, .obstacle.bird::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    width: 20px;
+    height: 3px;
+    background: black;
+    border-radius: 2px;
+  }
+  .obstacle.bird::before {
+    left: 0;
+    transform: rotate(30deg);
+    transform-origin: left center;
+  }
+  .obstacle.bird::after {
+    right: 0;
+    transform: rotate(-30deg);
+    transform-origin: right center;
+  }
+</style>
+</head>
+<body>
+<div id="gameContainer">
+  <div id="sky"></div>
+
+  <div id="balloon">
+    <div class="circle"></div>
+    <div class="string"></div>
+  </div>
+
+  <div id="controls">
+    <div id="instructions">Use arrow keys to control</div>
+    <select id="difficulty">
+      <option value="easy">Easy</option>
+      <option value="normal" selected>Normal</option>
+      <option value="hard">Hard</option>
+      <option value="extreme">Extreme</option>
+    </select>
+    <button id="startBtn">Start</button>
+  </div>
+
+  <button id="slowBtn" disabled>Slow (5s)</button>
+</div>
+
+<script>
+  const balloon = document.getElementById('balloon');
+  const gameContainer = document.getElementById('gameContainer');
+  const startBtn = document.getElementById('startBtn');
+  const slowBtn = document.getElementById('slowBtn');
+  const difficultySelect = document.getElementById('difficulty');
+
+  // Balloon position (top, left fixed at 10%)
+  let balloonX = window.innerWidth * 0.1;
+  let balloonY = window.innerHeight / 2;
+
+  // Balloon movement limits
+  const minY = 50;
+  const maxY = window.innerHeight - 150;
+  const minX = balloonX; // stationary horizontally near left side
+  const maxX = balloonX + 20; // slight horizontal movement
+
+  // Game variables
+  let obstacles = [];
+  let gameSpeed = 3; // base speed, changes with difficulty
+  let obstacleFrequency = 2000; // milliseconds between obstacles spawn
+  let obstacleTypes = ['spike'];
+  let obstacleSpeedMultiplier = 1;
+  let gameRunning = false;
+  let slowActive = false;
+
+  // For sky movement speed control
+  let sky = document.getElementById('sky');
+
+  // For obstacle creation interval
+  let obstacleInterval;
+
+  // Track keys pressed
+  let keysPressed = {};
+
+  // Balloon control speed (pixels per frame)
+  const moveSpeed = 5;
+
+  // Difficulty settings
+  const difficulties = {
+    easy: {
+      speed: 2,
+      frequency: 2500,
+      types: ['spike'],
+      obstaclesCount: 1
+    },
+    normal: {
+      speed: 3,
+      frequency: 2000,
+      types: ['spike', 'cloud'],
+      obstaclesCount: 1
+    },
+    hard: {
+      speed: 4,
+      frequency: 1500,
+      types: ['spike', 'cloud', 'bird'],
+      obstaclesCount: 2
+    },
+    extreme: {
+      speed: 6,
+      frequency: 1000,
+      types: ['spike', 'cloud', 'bird'],
+      obstaclesCount: 3
+    }
+  };
+
+  // Initialize balloon position
+  function setBalloonPosition() {
+    balloon.style.left = balloonX + 'px';
+    balloon.style.top = balloonY + 'px';
+  }
+  setBalloonPosition();
+
+  // Handle key events
+  window.addEventListener('keydown', e => {
+    keysPressed[e.key] = true;
+  });
+  window.addEventListener('keyup', e => {
+    keysPressed[e.key] = false;
+  });
+
+  // Slow button logic
+  slowBtn.addEventListener('click', () => {
+    if (slowActive) return;
+    slowActive = true;
+    gameSpeed /= 2;
+    obstacleSpeedMultiplier /= 2;
+    sky.style.animationDuration = '12s'; // slow sky animation
+
+    slowBtn.disabled = true;
+    setTimeout(() => {
+      gameSpeed *= 2;
+      obstacleSpeedMultiplier *= 2;
+      sky.style.animationDuration = '6s'; // restore sky animation
+      slowBtn.disabled = false;
+      slowActive = false;
+    }, 5000);
+  });
+
+  // Start game handler
+  startBtn.addEventListener('click', () => {
+    if (gameRunning) return;
+    startGame();
+  });
+
+  // Create an obstacle element
+  function createObstacle(type) {
+    const obs = document.createElement('div');
+    obs.classList.add('obstacle');
+    obs.classList.add(type);
+
+    // Random vertical position for obstacle
+    let obsY = Math.random() * (window.innerHeight - 100) + 50;
+    obs.style.top = obsY + 'px';
+
+    // Start from right edge
+    obs.style.left = window.innerWidth + 'px';
+
+    // Size adjustments by type
+    switch(type) {
+      case 'spike':
+        obs.style.width = '20px';
+        obs.style.height = '40px';
+        break;
+      case 'cloud':
+        obs.style.width = '60px';
+        obs.style.height = '30px';
+        break;
+      case 'bird':
+        obs.style.width = '40px';
+        obs.style.height = '20px';
+        break;
+    }
+
+    gameContainer.appendChild(obs);
+    obstacles.push({el: obs, type: type, x: window.innerWidth, y: obsY});
+  }
+
+  // Clear obstacles from screen and array
+  function clearObstacles() {
+    obstacles.forEach(o => gameContainer.removeChild(o.el));
+    obstacles = [];
+  }
+
+  // Check collision (simple bounding box)
+  function checkCollision(rect1, rect2) {
+    return !(rect2.left > rect1.right ||
+             rect2.right < rect1.left ||
+             rect2.top > rect1.bottom ||
+             rect2.bottom < rect1.top);
+  }
+
+  // Update game state on each animation frame
+  function update() {
+    if (!gameRunning) return;
+
+    // Balloon movement controlled by arrow keys
+    if (keysPressed['ArrowUp']) {
+      balloonY -= moveSpeed;
+      if (balloonY < minY) balloonY = minY;
+    }
+    if (keysPressed['ArrowDown']) {
+      balloonY += moveSpeed;
+      if (balloonY > maxY) balloonY = maxY;
+    }
+    if (keysPressed['ArrowLeft']) {
+      balloonX -= moveSpeed;
+      if (balloonX < minX) balloonX = minX;
+    }
+    if (keysPressed['ArrowRight']) {
+      balloonX += moveSpeed;
+      if (balloonX > maxX) balloonX = maxX;
+    }
+
+    setBalloonPosition();
+
+    // Move obstacles leftwards
+    for (let i = obstacles.length -1; i >= 0; i--) {
+      let o = obstacles[i];
+      o.x -= gameSpeed * obstacleSpeedMultiplier;
+      if (o.x < -100) {
+        // Remove obstacle off screen
+        gameContainer.removeChild(o.el);
+        obstacles.splice(i,1);
+      } else {
+        o.el.style.left = o.x + 'px';
+
+        // Collision detection with balloon
+        const balloonRect = balloon.getBoundingClientRect();
+        const obsRect = o.el.getBoundingClientRect();
+        if (checkCollision(balloonRect, obsRect)) {
+          endGame("Game Over! You hit an obstacle.");
+          return;
+        }
+      }
+    }
+
+    requestAnimationFrame(update);
+  }
+
+  // Spawn obstacles based on difficulty
+  function spawnObstacles() {
+    if (!gameRunning) return;
+    let diff = difficultySelect.value;
+    let setting = difficulties[diff];
+
+    // Spawn multiple obstacles based on difficulty.obstaclesCount
+    for (let i = 0; i < setting.obstaclesCount; i++) {
+      // Randomly pick obstacle type from difficulty types
+      let type = setting.types[Math.floor(Math.random() * setting.types.length)];
+      createObstacle(type);
+    }
+  }
+
+  // Start the game
+  function startGame() {
+    // Reset variables
+    balloonX = window.innerWidth * 0.1;
+    balloonY = window.innerHeight / 2;
+    setBalloonPosition();
+    clearObstacles();
+
+    gameRunning = true;
+    slowBtn.disabled = false;
+
+    // Set difficulty parameters
+    let diff = difficultySelect.value;
+    let setting = difficulties[diff];
+    gameSpeed = setting.speed;
+    obstacleFrequency = setting.frequency;
+    obstacleTypes = setting.types;
+    obstacleSpeedMultiplier = 1;
+
+    // Reset sky animation duration
+    sky.style.animationDuration = '6s';
+
+    // Start spawning obstacles repeatedly
+    if (obstacleInterval) clearInterval(obstacleInterval);
+    obstacleInterval = setInterval(() => {
+      if (gameRunning) spawnObstacles();
+    }, obstacleFrequency);
+
+    update();
+  }
+
+  // End the game
+  function endGame(msg) {
+    gameRunning = false;
+    clearInterval(obstacleInterval);
+    alert(msg);
+    slowBtn.disabled = true;
+  }
+
+  // On window resize, update balloon limits
+  window.addEventListener('resize', () => {
+    balloonX = window.innerWidth * 0.1;
+    if (balloonY > window.innerHeight - 150) balloonY = window.innerHeight - 150;
+    setBalloonPosition();
+  });
+</script>
+</body>
+</html>

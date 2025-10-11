@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Plane Game</title>
+<style>
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  body {
+    background: #87CEEB;
+    overflow: hidden;
+    font-family: Arial, sans-serif;
+  }
+  canvas {
+    display: block;
+    background: linear-gradient(#87CEEB, #1E90FF);
+  }
+  #start-btn, #slow-btn {
+    position: fixed;
+    bottom: 10px;
+    border: none;
+    border-radius: 12px;
+    padding: 10px 20px;
+    cursor: pointer;
+    font-size: 16px;
+    color: white;
+  }
+  #start-btn {
+    left: 10px;
+    background: green;
+  }
+  #slow-btn {
+    right: 10px;
+    background: orange;
+  }
+  #difficulty {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    font-size: 16px;
+  }
+  #instruction {
+    position: fixed;
+    top: 40px;
+    left: 10px;
+    color: white;
+    font-size: 16px;
+  }
+</style>
+</head>
+<body>
+<select id="difficulty">
+  <option value="easy">Easy</option>
+  <option value="normal">Normal</option>
+  <option value="hard">Hard</option>
+  <option value="extreme">Extreme</option>
+</select>
+<div id="instruction">Use arrow keys to control</div>
+<button id="start-btn">Start</button>
+<button id="slow-btn">Slow</button>
+<canvas id="gameCanvas" width="400" height="600"></canvas>
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+let plane = { x: 180, y: 300, width: 40, height: 40 };
+let obstacles = [];
+let keys = {};
+let gameSpeed = 2;
+let slowMode = false;
+let slowModeTimer = 0;
+let difficulty = 'easy';
+
+document.getElementById('difficulty').addEventListener('change', (e) => {
+  difficulty = e.target.value;
+});
+
+document.getElementById('start-btn').addEventListener('click', startGame);
+document.getElementById('slow-btn').addEventListener('click', () => {
+  slowMode = true;
+  slowModeTimer = 300; // frames (~5 seconds)
+});
+
+document.addEventListener('keydown', (e) => {
+  keys[e.key] = true;
+});
+
+document.addEventListener('keyup', (e) => {
+  keys[e.key] = false;
+});
+
+function startGame() {
+  obstacles = [];
+  plane.y = 300;
+  gameSpeed = 2;
+  slowMode = false;
+  requestAnimationFrame(updateGame);
+}
+
+function updateGame() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Move sky (background)
+  let gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  gradient.addColorStop(0, '#87CEEB');
+  gradient.addColorStop(1, '#1E90FF');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Draw plane
+  drawPlane();
+
+  // Move plane
+  if (keys['ArrowUp'] && plane.y > 0) plane.y -= 3;
+  if (keys['ArrowDown'] && plane.y + plane.height < canvas.height) plane.y += 3;
+  if (keys['ArrowLeft'] && plane.x > 0) plane.x -= 3;
+  if (keys['ArrowRight'] && plane.x + plane.width < canvas.width) plane.x += 3;
+
+  // Adjust speed for slow mode
+  let currentSpeed = slowMode ? gameSpeed / 2 : gameSpeed;
+
+  // Update obstacles
+  if (Math.random() < 0.02) {
+    let width = 40;
+    let height = 40;
+    let x = Math.random() * (canvas.width - width);
+    obstacles.push({ x: x, y: -height, width: width, height: height });
+    if (difficulty === 'extreme') {
+      obstacles.push({ x: Math.random() * (canvas.width - width), y: -height - 100, width: width, height: height });
+    }
+  }
+
+  for (let i = 0; i < obstacles.length; i++) {
+    obstacles[i].y += currentSpeed;
+    ctx.fillStyle = 'red';
+    ctx.fillRect(obstacles[i].x, obstacles[i].y, obstacles[i].width, obstacles[i].height);
+
+    if (checkCollision(plane, obstacles[i])) {
+      alert('Game Over!');
+      return;
+    }
+  }
+
+  obstacles = obstacles.filter(o => o.y < canvas.height);
+
+  // Increase difficulty
+  if (difficulty === 'normal') currentSpeed += 0.002;
+  if (difficulty === 'hard') currentSpeed += 0.004;
+  if (difficulty === 'extreme') currentSpeed += 0.006;
+
+  // Manage slow mode timer
+  if (slowMode) {
+    slowModeTimer--;
+    if (slowModeTimer <= 0) slowMode = false;
+  }
+
+  requestAnimationFrame(updateGame);
+}
+
+function drawPlane() {
+  ctx.fillStyle = 'white';
+  ctx.beginPath();
+  ctx.moveTo(plane.x, plane.y + plane.height / 2);
+  ctx.lineTo(plane.x + plane.width, plane.y + plane.height / 2);
+  ctx.lineTo(plane.x + plane.width / 2, plane.y);
+  ctx.closePath();
+  ctx.fill();
+
+  // Plane tail (string waving)
+  ctx.strokeStyle = 'white';
+  ctx.beginPath();
+  ctx.moveTo(plane.x, plane.y + plane.height / 2);
+  for (let i = 0; i < 10; i++) {
+    let dx = i % 2 === 0 ? -5 : 5;
+    ctx.lineTo(plane.x - i * 2, plane.y + plane.height / 2 + i * 4 + dx);
+  }
+  ctx.stroke();
+}
+
+function checkCollision(rect1, rect2) {
+  return (
+    rect1.x < rect2.x + rect2.width &&
+    rect1.x + rect1.width > rect2.x &&
+    rect1.y < rect2.y + rect2.height &&
+    rect1.y + rect1.height > rect2.y
+  );
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Save Data to Excel</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+        }
+        form {
+            max-width: 400px;
+            margin: auto;
+            padding: 20px;
+            border: 1px solid hsl(44, 100%, 49%);
+            border-radius: 10px;
+            background-color: #f9f9f9;
+        }
+        input, button {
+            width: 100%;
+            padding: 10px;
+            margin: 8px 0;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: lab(87.75% -86.07 82.58);
+            color: white;
+            border: none;
+        }
+        button:hover {
+            background-color: rgb(0, 0, 0);
+        }
+    </style>
+</head>
+<body>
+    <h2 style="text-align:center;">Person Data Form</h2>
+    <form id="personForm">
+        <input type="text" id="name" placeholder="Name" required>
+        <input type="email" id="email" placeholder="Email" required>
+        <input type="number" id="age" placeholder="Age" required>
+        <input type="number" id="number" placeholder="number" required>
+        <button type="button" onclick="downloadCSV()">Save to Excel</button>
+    </form>
+
+    <script>
+        function downloadCSV() {
+            const name = document.getElementById('name').value;
+            const email = document.getElementById('email').value;
+            const age = document.getElementById('age').value;
+            const number = document.getElementById('number').value;
+
+            const csvContent = "data:text/csv;charset=utf-8,"
+                + "Name,Email,Age,Number\n"
+                + `${name},${email},${age}${number}\n`;
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "person_data.csv");
+            document.body.appendChild(link); // Required for Firefox
+
+            link.click();
+        }
+    </script>
+</body>
+</html>

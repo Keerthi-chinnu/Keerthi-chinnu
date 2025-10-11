@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+<style>
+  html, body {
+    margin: 0; padding: 0; overflow: hidden;
+    background: linear-gradient(to bottom, #87ceeb 0%, #00aaff 100%);
+    height: 100vh;
+    font-family: Arial, sans-serif;
+    user-select: none;
+  }
+  #gameContainer {
+    position: relative;
+    width: 100vw;
+    height: 95vh;
+    overflow: hidden;
+  }
+  @keyframes skyMove {
+    0% {background-position: 0 0;}
+    50% {background-position: 0 30px;}
+    100% {background-position: 0 0;}
+  }
+  #sky {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(to bottom, #87ceeb 0%, #00aaff 100%);
+    animation: skyMove 6s ease-in-out infinite;
+    z-index: 0;
+  }
+  #plane {
+    position: absolute;
+    left: 10%;
+    top: 50%;
+    width: 100px;
+    height: 60px;
+    user-select: none;
+    z-index: 10;
+    transform-origin: center center;
+  }
+  #plane .body {
+    position: absolute;
+    background: rgb(255, 255, 255);
+    width: 70px;
+    height: 20px;
+    border-radius: 10px / 8px;
+    top: 20px;
+    left: 15px;
+    box-shadow: 0 0 10px rgba(255,255,255,0.8);
+  }
+  #plane .wing {
+    position: absolute;
+    width: 50px;
+    height: 12px;
+    background: white;
+    border-radius: px;
+    top: 15px;
+    left: 25px;
+    transform: rotate(25deg);
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+  }
+  #plane .tail {
+    position: absolute;
+    width: 20px;
+    height: 10px;
+    background: rgb(0, 0, 0);
+    border-radius: 5px;
+    top: 10px;
+    left: 0;
+    transform: rotate(-30deg);
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.8);
+  }
+  #controls {
+    position: absolute;
+    top: 15px;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+    color: white;
+    z-index: 20;
+  }
+  #instructions {
+    margin: 10px 0 20px;
+    font-size: 18px;
+    font-weight: bold;
+  }
+  button, select {
+    font-size: 16px;
+    padding: 8px 15px;
+    margin: 0 8px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+  }
+  button#startBtn {
+    background-color: #0077cc;
+    color: white;
+  }
+  button#startBtn:hover {
+    background-color: #005fa3;
+  }
+  select#difficulty {
+    border-radius: 6px;
+  }
+  #slowBtn {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    padding: 10px 20px;
+    background: #444;
+    color: white;
+    border-radius: 20px;
+    border: none;
+    cursor: pointer;
+    z-index: 20;
+    font-size: 16px;
+    user-select: none;
+    opacity: 1;
+    transition: opacity 0.3s ease;
+  }
+  #slowBtn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .obstacle {
+    position: absolute;
+    background: red;
+    border-radius: 6px;
+    user-select: none;
+  }
+  .obstacle.spike {
+    width: 20px;
+    height: 40px;
+    background: linear-gradient(45deg, #ff4444 0%, #bb0000 100%);
+    clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+  }
+  .obstacle.cloud {
+    width: 60px;
+    height: 30px;
+    background: #eee;
+    border-radius: 30px;
+    box-shadow: 15px 0 0 0 #eee, 30px 0 0 0 #eee;
+  }
+  .obstacle.bird {
+    width: 40px;
+    height: 20px;
+    background: transparent;
+  }
+  .obstacle.bird::before, .obstacle.bird::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    width: 20px;
+    height: 3px;
+    background: black;
+    border-radius: 2px;
+  }
+  .obstacle.bird::before {
+    left: 0;
+    transform: rotate(30deg);
+    transform-origin: left center;
+  }
+  .obstacle.bird::after {
+    right: 0;
+    transform: rotate(-30deg);
+    transform-origin: right center;
+  }
+  #score {
+    position: absolute;
+    top: 15px;
+    right: 20px;
+    font-size: 18px;
+    font-weight: bold;
+    color: black;
+    z-index: 20;
+  }
+
+  /* On-screen arrow buttons */
+  #arrowButtons {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .arrowRow {
+    display: flex;
+    gap: 5px;
+    justify-content: center;
+  }
+  .arrowBtn {
+    width: 40px;
+    height: 40px;
+    background: rgba(0,0,0,0.6);
+    color: white;
+    font-size: 20px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    user-select: none;
+  }
+</style>
+</head>
+<body>
+<div id="gameContainer">
+  <div id="sky"></div>
+
+  <div id="plane">
+    <div class="body"></div>
+    <div class="wing"></div>
+    <div class="tail"></div>
+  </div>
+
+  <div id="controls">
+    <div id="instructions">Use arrow keys or on-screen buttons</div>
+    <select id="difficulty">
+      <option value="easy">Easy</option>
+      <option value="normal" selected>Normal</option>
+      <option value="hard">Hard</option>
+      <option value="extreme">Extreme</option>
+    </select>
+    <button id="startBtn">Start</button>
+  </div>
+
+  <button id="slowBtn" disabled>Slow (5s)</button>
+
+  <div id="score">Score: 0</div>
+
+  <div id="arrowButtons">
+    <div class="arrowRow">
+      <button class="arrowBtn" data-key="ArrowUp">↑</button>
+    </div>
+    <div class="arrowRow">
+
+      <button class="arrowBtn" data-key="ArrowDown">↓</button>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  const plane = document.getElementById('plane');
+  const gameContainer = document.getElementById('gameContainer');
+  const startBtn = document.getElementById('startBtn');
+  const slowBtn = document.getElementById('slowBtn');
+  const difficultySelect = document.getElementById('difficulty');
+  const scoreElement = document.getElementById('score');
+
+  let planeX = window.innerWidth * 0.1;
+  let planeY = window.innerHeight / 2;
+
+  const minY = 50;
+  const maxY = window.innerHeight - 150;
+  const minX = planeX;
+  const maxX = planeX + 20;
+
+  let obstacles = [];
+  let gameSpeed = 3;
+  let obstacleFrequency = 2000;
+  let obstacleTypes = ['spike'];
+  let obstacleSpeedMultiplier = 1;
+  let gameRunning = false;
+  let slowActive = false;
+
+  let sky = document.getElementById('sky');
+  let obstacleInterval;
+
+  let keysPressed = {};
+  const moveSpeed = 5;
+
+  const difficulties = {
+    easy: { speed: 2, frequency: 2500, types: ['spike'], obstaclesCount: 1 },
+    normal: { speed: 3, frequency: 2000, types: ['spike', 'cloud'], obstaclesCount: 1 },
+    hard: { speed: 4, frequency: 1500, types: ['spike', 'cloud', 'bird'], obstaclesCount: 2 },
+    extreme: { speed: 6, frequency: 1000, types: ['spike', 'cloud', 'bird'], obstaclesCount: 3 }
+  };
+
+  let score = 0;
+
+  function setPlanePosition() {
+    plane.style.left = planeX + 'px';
+    plane.style.top = planeY + 'px';
+  }
+  setPlanePosition();
+
+  window.addEventListener('keydown', e => { keysPressed[e.key] = true; });
+  window.addEventListener('keyup', e => { keysPressed[e.key] = false; });
+
+  // Handle on-screen arrow button press
+  document.querySelectorAll('.arrowBtn').forEach(btn => {
+    const key = btn.dataset.key;
+    btn.addEventListener('mousedown', () => { keysPressed[key] = true; });
+    btn.addEventListener('mouseup', () => { keysPressed[key] = false; });
+    btn.addEventListener('touchstart', e => { keysPressed[key] = true; e.preventDefault(); });
+    btn.addEventListener('touchend', e => { keysPressed[key] = false; e.preventDefault(); });
+  });
+
+  slowBtn.addEventListener('click', () => {
+    if (slowActive) return;
+    slowActive = true;
+    gameSpeed /= 2;
+    obstacleSpeedMultiplier /= 2;
+    sky.style.animationDuration = '12s';
+    slowBtn.disabled = true;
+    setTimeout(() => {
+      gameSpeed *= 2;
+      obstacleSpeedMultiplier *= 2;
+      sky.style.animationDuration = '6s';
+      slowBtn.disabled = false;
+      slowActive = false;
+    }, 5000);
+  });
+
+  startBtn.addEventListener('click', () => {
+    if (gameRunning) return;
+    startGame();
+  });
+
+  function createObstacle(type) {
+    const obs = document.createElement('div');
+    obs.classList.add('obstacle', type);
+    const posY = Math.random() * (maxY - minY) + minY;
+    obs.style.top = posY + 'px';
+    obs.style.left = window.innerWidth + 'px';
+    gameContainer.appendChild(obs);
+    obstacles.push({ element: obs, type: type, x: window.innerWidth, y: posY });
+  }
+
+  function spawnObstacles() {
+    const difficulty = difficultySelect.value;
+    const settings = difficulties[difficulty];
+    for (let i = 0; i < settings.obstaclesCount; i++) {
+      const type = settings.types[Math.floor(Math.random() * settings.types.length)];
+      createObstacle(type);
+    }
+  }
+
+  function removeObstacle(index) {
+    if (obstacles[index]) {
+      gameContainer.removeChild(obstacles[index].element);
+      obstacles.splice(index, 1);
+    }
+  }
+
+  function checkCollision(planeRect, obsRect) {
+    return !(planeRect.right < obsRect.left || 
+             planeRect.left > obsRect.right || 
+             planeRect.bottom < obsRect.top || 
+             planeRect.top > obsRect.bottom);
+  }
+
+  function gameOver() {
+    gameRunning = false;
+    alert('Game Over! Refresh to play again.');
+    obstacles.forEach(o => gameContainer.removeChild(o.element));
+    obstacles = [];
+    slowBtn.disabled = true;
+    clearInterval(obstacleInterval);
+  }
+
+  function gameLoop() {
+    if (!gameRunning) return;
+
+    if (keysPressed['ArrowUp']) planeY = Math.max(minY, planeY - moveSpeed);
+    if (keysPressed['ArrowDown']) planeY = Math.min(maxY, planeY + moveSpeed);
+    if (keysPressed['ArrowLeft']) planeX = Math.max(minX, planeX - moveSpeed);
+    if (keysPressed['ArrowRight']) planeX = Math.min(maxX, planeX + moveSpeed);
+
+    setPlanePosition();
+
+    score += 0.1;
+    scoreElement.textContent = 'Score: ' + Math.floor(score);
+
+    for (let i = 0; i < obstacles.length; i++) {
+      obstacles[i].x -= gameSpeed * obstacleSpeedMultiplier;
+      if (obstacles[i].x + obstacles[i].element.offsetWidth < 0) {
+        removeObstacle(i);
+        i--;
+        continue;
+      }
+      obstacles[i].element.style.left = obstacles[i].x + 'px';
+      const planeRect = plane.getBoundingClientRect();
+      const obsRect = obstacles[i].element.getBoundingClientRect();
+      if (checkCollision(planeRect, obsRect)) {
+        gameOver();
+        return;
+      }
+    }
+    requestAnimationFrame(gameLoop);
+  }
+
+  function startGame() {
+    gameRunning = true;
+    slowBtn.disabled = false;
+    const difficulty = difficultySelect.value;
+    const settings = difficulties[difficulty];
+    gameSpeed = settings.speed;
+    obstacleFrequency = settings.frequency;
+    obstacleTypes = settings.types;
+    obstacleSpeedMultiplier = 1;
+    obstacles.forEach(o => gameContainer.removeChild(o.element));
+    obstacles = [];
+    sky.style.animationDuration = '6s';
+    score = 0;
+    scoreElement.textContent = 'Score: 0';
+    obstacleInterval = setInterval(spawnObstacles, obstacleFrequency);
+    gameLoop();
+  }
+
+  window.addEventListener('resize', () => {
+    planeX = window.innerWidth * 0.1;
+    planeY = Math.min(maxY, planeY);
+    setPlanePosition();
+  });
+</script>
+</body>
+</html>
