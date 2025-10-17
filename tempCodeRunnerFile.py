@@ -1,1 +1,0 @@
-# Finger tip IDs
