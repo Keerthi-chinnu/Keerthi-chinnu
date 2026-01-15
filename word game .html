@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Typing Tank Defense</title>
+<style>
+    body {
+        margin: 0;
+        background: black;
+        color: #0f0;
+        font-family: monospace;
+        overflow: hidden;
+    }
+    #ui {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        z-index: 2;
+    }
+    #typeBox {
+        position: absolute;
+        bottom: 50px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: transparent;
+        border: 1px solid #0f0;
+        color: #0f0;
+        font-size: 18px;
+        padding: 5px;
+        width: 300px;
+        z-index: 2;
+    }
+    button {
+        background: black;
+        border: 1px solid #0f0;
+        color: #0f0;
+        margin: 2px;
+        padding: 5px;
+        cursor: pointer;
+    }
+    button.active {
+        background: #0f0;
+        color: white;
+    }
+</style>
+</head>
+
+<body>
+<canvas id="game"></canvas>
+
+<div id="ui">
+    <div>Score: <span id="score">0</span></div>
+    <div>Level: <span id="level">1</span></div>
+    <div>Health: <span id="health">100</span></div>
+    <br>
+    <button id="btn-easy" class="active" onclick="setMode('easy')">Easy</button>
+    <button id="btn-normal" onclick="setMode('normal')">Normal</button>
+    <button id="btn-hard" onclick="setMode('hard')">Hard</button>
+    <button id="btn-extreme" onclick="setMode('extreme')">Extreme</button>
+</div>
+
+<input id="typeBox" placeholder="Type here..." autofocus>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+canvas.width = innerWidth;
+canvas.height = innerHeight;
+
+let tank = { x: canvas.width/2, y: canvas.height/2 };
+let words = [];
+let particles = [];
+let score = 0, level = 1, health = 100;
+let mode = "easy";
+let spawnTimer = 0;
+let gameStarted = false;
+let maxWordLength = 3;
+
+const wordList = [
+    "bug","css","app","int","java","html","code","loop","list","file","text","user","mode","play","save","load","exit","menu",
+    "array","class","logic","input","float","score","debug","render",
+    "object","canvas","string","output","python","script","system","window","memory","device","signal","buffer",
+    "process","network","storage","compile","function","variable","terminal","operator","resource","protocol","pipeline",
+    "compiler","debugger","argument","parameter","database","software","interface","firmware","emulator","registry","framework",
+    "repository","encryption","decryption","dependency",
+    "inheritance","polymorphism","serialization","optimization","architecture","performance","scalability",
+    "encapsulation","multithreading","virtualization","cybersecurity","authentication","authorization","microservices",
+    "synchronization","infrastructure","communication","implementation","configuration",
+    "internationalization","decentralization","interoperability","cryptographically","microarchitecture",
+    "reconfiguration","faultmanagement","authorizationtoken","distributedcomputing",
+    "observability","faulttolerance","loadbalancing","concurrency","orchestration",
+    "iteration","validation","deployment","integration","abstraction","refactoring",
+    "computation","instruction","compilation","transmission","representation",
+    "optimizationloop","dataprocessing","memoryallocation","processmanagement",
+    "threadexecution","eventhandling","errorhandling","systemarchitecture",
+    "networkprotocols","securitypolicies","resourceallocation","distributedstorage"
+];
+
+const modes = {
+    easy: { speed: 0.4, rate: 200 },
+    normal: { speed: 0.7, rate: 150 },
+    hard: { speed: 1.2, rate: 100 },
+    extreme: { speed: 2, rate: 60 }
+};
+
+function setMode(m) {
+    mode = m;
+    // Remove active class from all buttons
+    document.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
+    // Add active class to selected button
+    document.getElementById('btn-' + m).classList.add('active');
+    resetGame();
+}
+
+function resetGame() {
+    words = [];
+    score = 0;
+    level = 1;
+    health = 100;
+    maxWordLength = 3;
+    gameStarted = false;
+}
+
+function startGame() {
+    gameStarted = true;
+    document.getElementById("typeBox").focus();
+}
+
+function spawnWord(boss=false) {
+    let edge = Math.floor(Math.random()*4);
+    let x,y;
+    if(edge===0){x=0;y=Math.random()*canvas.height;}
+    if(edge===1){x=canvas.width;y=Math.random()*canvas.height;}
+    if(edge===2){x=Math.random()*canvas.width;y=0;}
+    if(edge===3){x=Math.random()*canvas.width;y=canvas.height;}
+
+    // Filter words by current max length
+    let availableWords = wordList.filter(w => w.length <= maxWordLength);
+    if(availableWords.length === 0) availableWords = wordList.filter(w => w.length <= maxWordLength + 2);
+    
+    let text = boss ? "BOSS-"+availableWords[Math.floor(Math.random()*availableWords.length)] : availableWords[Math.floor(Math.random()*availableWords.length)];
+    words.push({
+        text,
+        x,y,
+        hp: boss ? text.length*2 : text.length,
+        boss
+    });
+}
+
+function updateWords() {
+    for(let i=words.length-1;i>=0;i--){
+        let w = words[i];
+        let dx = tank.x - w.x;
+        let dy = tank.y - w.y;
+        let dist = Math.hypot(dx,dy);
+        w.x += dx/dist * modes[mode].speed;
+        w.y += dy/dist * modes[mode].speed;
+
+        if(dist < 20){
+            health -= w.boss ? 20 : 10;
+            words.splice(i,1);
+        }
+    }
+}
+
+function drawTank() {
+    ctx.fillStyle="#0f0";
+    ctx.beginPath();
+    ctx.arc(tank.x,tank.y,20,0,Math.PI*2);
+    ctx.fill();
+    
+    // Draw start button if game hasn't started
+    if(!gameStarted) {
+        ctx.fillStyle="#0f0";
+        ctx.fillRect(tank.x-40, tank.y-60, 80, 30);
+        ctx.fillStyle="#000";
+        ctx.font="16px monospace";
+        ctx.fillText("START", tank.x-25, tank.y-38);
+    }
+}
+
+function drawWords() {
+    ctx.fillStyle="#0f0";
+    ctx.font="18px monospace";
+    words.forEach(w=>{
+        ctx.fillText(w.text,w.x,w.y);
+    });
+}
+
+function explode(x,y) {
+    for(let i=0;i<20;i++){
+        particles.push({
+            x,y,
+            dx:(Math.random()-0.5)*4,
+            dy:(Math.random()-0.5)*4,
+            life:30
+        });
+    }
+}
+
+function updateParticles(){
+    particles.forEach(p=>{
+        p.x+=p.dx;
+        p.y+=p.dy;
+        p.life--;
+    });
+    particles = particles.filter(p=>p.life>0);
+}
+
+function drawParticles(){
+    ctx.fillStyle="#0f0";
+    particles.forEach(p=>{
+        ctx.fillRect(p.x,p.y,2,2);
+    });
+}
+
+document.getElementById("typeBox").addEventListener("input",e=>{
+    let value = e.target.value;
+    for(let i=words.length-1;i>=0;i--){
+        if(words[i].text === value){
+            explode(words[i].x,words[i].y);
+            score += words[i].boss ? 50 : 10;
+            words.splice(i,1);
+            e.target.value="";
+            if(score % 100 === 0) {
+                level++;
+                // Increase max word length every 2 levels
+                if(level % 2 === 0 && maxWordLength < 25) {
+                    maxWordLength += 2;
+                }
+                if(level % 5 === 0) spawnWord(true);
+            }
+            break;
+        }
+    }
+});
+
+// Click handler for start button
+canvas.addEventListener("click", (e) => {
+    if(!gameStarted) {
+        let rect = canvas.getBoundingClientRect();
+        let mouseX = e.clientX - rect.left;
+        let mouseY = e.clientY - rect.top;
+        
+        // Check if click is on start button
+        if(mouseX >= tank.x-40 && mouseX <= tank.x+40 && 
+           mouseY >= tank.y-60 && mouseY <= tank.y-30) {
+            startGame();
+        }
+    }
+});
+
+function matrixBackground(){
+    ctx.fillStyle="rgba(0,0,0,0.2)";
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle="#033";
+    ctx.font="14px monospace";
+    for(let i=0;i<50;i++){
+        ctx.fillText(String.fromCharCode(33+Math.random()*94),
+        Math.random()*canvas.width,
+        Math.random()*canvas.height);
+    }
+}
+
+function gameLoop(){
+    matrixBackground();
+    drawTank();
+    drawWords();
+    updateWords();
+    updateParticles();
+    drawParticles();
+
+    // Only spawn words if game has started
+    if(gameStarted) {
+        spawnTimer++;
+        if(spawnTimer > modes[mode].rate - level*2){
+            spawnWord();
+            spawnTimer=0;
+        }
+    }
+
+    document.getElementById("score").textContent=score;
+    document.getElementById("level").textContent=level;
+    document.getElementById("health").textContent=health;
+
+    if(health > 0) requestAnimationFrame(gameLoop);
+    else alert("Game Over! Score: "+score);
+}
+
+gameLoop();
+</script>
+</body>
+</html>
