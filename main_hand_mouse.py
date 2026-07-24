@@ -18,6 +18,28 @@ cap.set(4, hCam)
 # ====================== Hand Detector ======================
 detector = HandDetector(maxHands=1, detectionCon=0.85, trackCon=0.8)
 
+# ====================== Audio Setup ======================
+import comtypes
+from comtypes import CLSCTX_ALL, CLSCTX_INPROC_SERVER, CoCreateInstance
+from ctypes import cast, POINTER
+from pycaw.pycaw import IAudioEndpointVolume, IMMDeviceEnumerator
+
+CLSID_MMDeviceEnumerator = comtypes.GUID("{BCDE0395-E52F-467C-8E3D-C4579291692E}")
+device_enumerator = CoCreateInstance(
+    CLSID_MMDeviceEnumerator,
+    IMMDeviceEnumerator,
+    CLSCTX_INPROC_SERVER
+)
+endpoint = device_enumerator.GetDefaultAudioEndpoint(0, 1)  # 0=eRender, 1=eMultimedia
+interface = endpoint.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+volume = cast(interface, POINTER(IAudioEndpointVolume))
+
+volRange = volume.GetVolumeRange()
+minVol, maxVol = volRange[0], volRange[1]
+vol = 0
+volBar = 400
+volPer = 0
+
 # ====================== Misc Setup ======================
 tipIds = [4, 8, 12, 16, 20]
 mode = 'N'
@@ -85,7 +107,7 @@ while True:
             x1, y1 = lmList[8][1], lmList[8][2]
             screenWidth, screenHeight = pyautogui.size()
 
-            # ✅ MIRRORED X for natural movement
+            # Mirrored X for natural movement
             X = int(np.interp(x1, [110, 620], [screenWidth - 1, 0]))
             Y = int(np.interp(y1, [20, 350], [0, screenHeight - 1]))
 
@@ -110,6 +132,53 @@ while True:
                 cv2.circle(img, (pinky_x, pinky_y), 10, (255, 0, 0), cv2.FILLED)
                 pyautogui.rightClick()
 
+    # ====================== Volume Mode ======================
+    if mode == 'Volume' and len(fingers) > 0:
+        putText('Volume')
+
+        if fingers[1:] == [0, 0, 0, 0]:
+            active = 0
+            mode = 'N'
+        else:
+            thumb_x, thumb_y = lmList[4][1], lmList[4][2]
+            index_x, index_y = lmList[8][1], lmList[8][2]
+
+            cx, cy = (thumb_x + index_x) // 2, (thumb_y + index_y) // 2
+
+            # Pinky acts as a "lock" switch: closed pinky = freeze volume changes
+            pinky_open = fingers[4] == 1
+
+            if pinky_open:
+                line_color = (255, 0, 255)   # normal color = actively adjusting
+            else:
+                line_color = (0, 0, 255)     # red = locked, not adjusting
+
+            cv2.circle(img, (thumb_x, thumb_y), 10, line_color, cv2.FILLED)
+            cv2.circle(img, (index_x, index_y), 10, line_color, cv2.FILLED)
+            cv2.line(img, (thumb_x, thumb_y), (index_x, index_y), line_color, 3)
+            cv2.circle(img, (cx, cy), 8, line_color, cv2.FILLED)
+
+            length = math.hypot(index_x - thumb_x, index_y - thumb_y)
+
+            if pinky_open:
+                # Pinky raised -> allow volume to change
+                vol = np.interp(length, [20, 200], [minVol, maxVol])
+                volBar = np.interp(length, [20, 200], [400, 150])
+                volPer = np.interp(length, [20, 200], [0, 100])
+                volume.SetMasterVolumeLevel(vol, None)
+
+                if length < 25:
+                    cv2.circle(img, (cx, cy), 8, (0, 255, 0), cv2.FILLED)
+            else:
+                # Pinky closed -> locked, show status text, skip volume update
+                putText('LOCKED', loc=(250, 100), color=(0, 0, 255))
+
+    # ====================== Volume Bar Display ======================
+    if mode == 'Volume':
+        cv2.rectangle(img, (50, 150), (85, 400), (255, 0, 0), 3)
+        cv2.rectangle(img, (50, int(volBar)), (85, 400), (255, 0, 0), cv2.FILLED)
+        cv2.putText(img, f'{int(volPer)} %', (40, 450), cv2.FONT_HERSHEY_COMPLEX, 1, (255, 0, 0), 3)
+
     # ====================== FPS Display ======================
     cTime = time.time()
     fps = 100 / ((cTime + 1) - pTime)
@@ -124,40 +193,3 @@ while True:
 # ====================== Cleanup ======================
 cap.release()
 cv2.destroyAllWindows()
-
-class HandDetector:
-    def __init__(self, mode=False, maxHands=1, detectionCon=1, trackCon=1):
-        self.mode = mode
-        self.maxHands = maxHands
-        self.detectionCon = detectionCon
-        self.trackCon = trackCon
-
-        self.mpHands = mp.solutions.hands
-        self.hands = self.mpHands.Hands(static_image_mode=self.mode,
-                                        max_num_hands=self.maxHands,
-                                        min_detection_confidence=self.detectionCon,
-                                        min_tracking_confidence=self.trackCon)
-        self.mpDraw = mp.solutions.drawing_utils
-
-    def find_hands(self, img, draw=True):
-        imgRGB = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        self.results = self.hands.process(imgRGB)
-
-        if self.results.multi_hand_landmarks:
-            for handLms in self.results.multi_hand_landmarks:
-                if draw:
-                    self.mpDraw.draw_landmarks(img, handLms, self.mpHands.HAND_CONNECTIONS)
-        return img
-
-    def find_position(self, img, handNo=0, draw=True):
-        lmList = []
-        if self.results.multi_hand_landmarks:
-            myHand = self.results.multi_hand_landmarks[handNo]
-            h, w, c = img.shape
-            for id, lm in enumerate(myHand.landmark):
-                cx, cy = int(lm.x * w), int(lm.y * h)
-                lmList.append([id, cx, cy])
-                if draw:
-                    cv2.circle(img, (cx, cy), 5, (255, 0, 255), cv2.FILLED)
-
-        return lmList
